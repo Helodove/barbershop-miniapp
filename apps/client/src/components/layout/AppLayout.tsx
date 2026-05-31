@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useLocation } from 'react-router-dom'
+import { useOutlet, NavLink, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect } from 'react'
 import { tg } from '../../lib/telegram'
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
 
 export function AppLayout() {
   const location = useLocation()
+  const currentOutlet = useOutlet()
 
   useEffect(() => {
     tg.ready()
@@ -27,7 +28,7 @@ export function AppLayout() {
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.2 }}
         >
-          <Outlet />
+          {currentOutlet}
         </motion.div>
       </AnimatePresence>
 
@@ -39,7 +40,7 @@ export function AppLayout() {
               to={item.to}
               end={item.to === '/'}
               className={({ isActive }) =>
-                `flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
+                `flex-1 flex flex-col items-center gap-1 py-3 min-h-[48px] transition-colors ${
                   isActive ? 'text-gold' : 'text-white/40'
                 }`
               }

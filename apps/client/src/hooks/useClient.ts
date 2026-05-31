@@ -27,11 +27,11 @@ export function useClient() {
 
 export function useRegisterClient() {
   const queryClient = useQueryClient()
-  const tgUser = getTelegramUser()
 
   return useMutation({
     mutationFn: async (): Promise<Client> => {
-      if (!tgUser) throw new Error('No Telegram user')
+      const tgUser = getTelegramUser()
+      if (!tgUser) throw new Error('Telegram не инициализирован. Откройте приложение через Telegram.')
 
       const { data, error } = await supabase
         .from('clients')
@@ -48,6 +48,7 @@ export function useRegisterClient() {
       return data
     },
     onSuccess: (data) => {
+      const tgUser = getTelegramUser()
       queryClient.setQueryData(['client', tgUser?.id], data)
     },
   })

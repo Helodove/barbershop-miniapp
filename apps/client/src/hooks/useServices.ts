@@ -18,7 +18,7 @@ export function useServices() {
   })
 }
 
-export function useServicesByCategory(services: Service[]): Record<string, Service[]> {
+export function groupServicesByCategory(services: Service[]): Record<string, Service[]> {
   const grouped: Record<string, Service[]> = {}
   for (const service of services) {
     const cat = service.category ?? 'Прочее'
