@@ -1,3 +1,6 @@
+[project]
+project_id = "barbershop-miniapp"
+
 [api]
 port = 54321
 
