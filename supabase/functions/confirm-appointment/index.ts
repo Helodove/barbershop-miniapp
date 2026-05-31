@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,12 +15,25 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
-    const { appointment_id, action } = await req.json()
+    // Verify caller has service role authorization
+    const authHeader = req.headers.get('Authorization')
+    const apiKey = req.headers.get('apikey')
+    const callerKey = authHeader?.replace('Bearer ', '') || apiKey
+
+    if (!callerKey || callerKey !== serviceKey) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const supabase = createClient(supabaseUrl, serviceKey)
+
+    const body = await req.json()
+    const { appointment_id, action } = body
 
     if (!appointment_id || !action) {
       return new Response(
@@ -29,7 +42,6 @@ serve(async (req) => {
       )
     }
 
-    // Get appointment
     const { data: appointment, error: apptError } = await supabase
       .from('appointments')
       .select('*')
@@ -44,8 +56,13 @@ serve(async (req) => {
     }
 
     if (action === 'complete') {
-      // Mark slot as booked (keep booked after completion for history)
-      // Update appointment status
+      if (appointment.status !== 'confirmed') {
+        return new Response(
+          JSON.stringify({ error: `Cannot complete appointment with status: ${appointment.status}` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
       const { error: updateError } = await supabase
         .from('appointments')
         .update({ status: 'completed' })
@@ -53,51 +70,39 @@ serve(async (req) => {
 
       if (updateError) throw updateError
 
-      // Award bonus points
-      const bonusToAward = BONUS_PER_VISIT
+      // Atomic increment using RPC
+      await supabase.rpc('increment_client_bonus', {
+        p_client_id: appointment.client_id,
+        p_points: BONUS_PER_VISIT
+      })
 
-      // Use raw update instead of RPC for simplicity
-      const { data: client } = await supabase
-        .from('clients')
-        .select('bonus_points, total_visits')
-        .eq('id', appointment.client_id)
-        .single()
+      await supabase.rpc('increment_client_visits', {
+        p_client_id: appointment.client_id
+      })
 
-      await supabase
-        .from('clients')
-        .update({
-          bonus_points: (client?.bonus_points || 0) + bonusToAward,
-          total_visits: (client?.total_visits || 0) + 1
-        })
-        .eq('id', appointment.client_id)
-
-      // Record bonus history
-      await supabase
-        .from('bonus_history')
-        .insert({
-          client_id: appointment.client_id,
-          appointment_id: appointment_id,
-          points_change: bonusToAward,
-          reason: 'Начислено за посещение'
-        })
+      await supabase.from('bonus_history').insert({
+        client_id: appointment.client_id,
+        appointment_id: appointment_id,
+        points_change: BONUS_PER_VISIT,
+        reason: 'Начислено за посещение'
+      })
 
       return new Response(
-        JSON.stringify({ success: true, bonus_earned: bonusToAward }),
+        JSON.stringify({ success: true, bonus_earned: BONUS_PER_VISIT }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
     if (action === 'confirm') {
-      await supabase
-        .from('appointments')
-        .update({ status: 'confirmed' })
-        .eq('id', appointment_id)
+      if (appointment.status !== 'pending') {
+        return new Response(
+          JSON.stringify({ error: `Cannot confirm appointment with status: ${appointment.status}` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
 
-      // Mark slot as booked
-      await supabase
-        .from('time_slots')
-        .update({ is_booked: true })
-        .eq('id', appointment.slot_id)
+      await supabase.from('appointments').update({ status: 'confirmed' }).eq('id', appointment_id)
+      await supabase.from('time_slots').update({ is_booked: true }).eq('id', appointment.slot_id)
 
       return new Response(
         JSON.stringify({ success: true }),
@@ -106,38 +111,28 @@ serve(async (req) => {
     }
 
     if (action === 'cancel') {
-      await supabase
-        .from('appointments')
-        .update({ status: 'cancelled' })
-        .eq('id', appointment_id)
+      if (['completed', 'cancelled'].includes(appointment.status)) {
+        return new Response(
+          JSON.stringify({ error: `Cannot cancel appointment with status: ${appointment.status}` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
 
-      // Free the slot
-      await supabase
-        .from('time_slots')
-        .update({ is_booked: false })
-        .eq('id', appointment.slot_id)
+      await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', appointment_id)
+      await supabase.from('time_slots').update({ is_booked: false }).eq('id', appointment.slot_id)
 
-      // Refund bonus points if they were used
       if (appointment.bonus_used > 0) {
-        const { data: client } = await supabase
-          .from('clients')
-          .select('bonus_points')
-          .eq('id', appointment.client_id)
-          .single()
+        await supabase.rpc('increment_client_bonus', {
+          p_client_id: appointment.client_id,
+          p_points: appointment.bonus_used
+        })
 
-        await supabase
-          .from('clients')
-          .update({ bonus_points: (client?.bonus_points || 0) + appointment.bonus_used })
-          .eq('id', appointment.client_id)
-
-        await supabase
-          .from('bonus_history')
-          .insert({
-            client_id: appointment.client_id,
-            appointment_id: appointment_id,
-            points_change: appointment.bonus_used,
-            reason: 'Возврат бонусов при отмене записи'
-          })
+        await supabase.from('bonus_history').insert({
+          client_id: appointment.client_id,
+          appointment_id: appointment_id,
+          points_change: appointment.bonus_used,
+          reason: 'Возврат бонусов при отмене записи'
+        })
       }
 
       return new Response(
@@ -147,7 +142,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ error: 'Unknown action' }),
+      JSON.stringify({ error: 'Unknown action. Valid: confirm, complete, cancel' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {

@@ -13,6 +13,9 @@ serve(async (req) => {
   try {
     const { telegram_id, message, parse_mode = 'HTML' } = await req.json()
 
+    const validParseModes = ['HTML', 'Markdown', 'MarkdownV2']
+    const safeParseMmode = validParseModes.includes(parse_mode) ? parse_mode : 'HTML'
+
     const botToken = Deno.env.get('BOT_TOKEN')
     if (!botToken) {
       throw new Error('BOT_TOKEN not configured')
@@ -33,7 +36,7 @@ serve(async (req) => {
         body: JSON.stringify({
           chat_id: telegram_id,
           text: message,
-          parse_mode,
+          parse_mode: safeParseMmode,
         }),
       }
     )

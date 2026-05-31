@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,6 +22,26 @@ serve(async (req) => {
     if (!barber_id || !date) {
       return new Response(
         JSON.stringify({ error: 'barber_id and date are required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+    if (!dateRegex.test(date)) {
+      return new Response(
+        JSON.stringify({ error: 'date must be in YYYY-MM-DD format' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Reject past dates
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const slotDate = new Date(date)
+    if (slotDate < today) {
+      return new Response(
+        JSON.stringify({ error: 'Cannot generate slots for past dates' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
