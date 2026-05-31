@@ -40,6 +40,7 @@ export interface TimeSlot {
   start_time: string;
   end_time: string;
   is_booked: boolean;
+  is_blocked: boolean;
 }
 
 export interface Appointment {
