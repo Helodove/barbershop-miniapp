@@ -42,6 +42,8 @@ function useAppointments(filterBarber: string, filterStatus: string, filterDate:
         const { data: slots } = await supabase.from('time_slots').select('id').eq('date', filterDate)
         if (slots && slots.length > 0) {
           query = query.in('slot_id', slots.map(s => s.id))
+        } else {
+          return []
         }
       }
 
@@ -191,9 +193,6 @@ export function AppointmentsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-appointments'] })
-      if (selectedAppt) {
-        setSelectedAppt(prev => prev ? { ...prev, status: (prev as Appointment).status } : null)
-      }
     },
   })
 
