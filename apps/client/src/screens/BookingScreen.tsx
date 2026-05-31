@@ -89,7 +89,7 @@ function StepBarber({
   return (
     <div>
       <h2 className="text-white font-display text-xl font-bold mb-1">Выберите мастера</h2>
-      <p className="text-white/40 text-sm font-body mb-6">Шаг 1 из 4</p>
+      <p className="text-white/40 text-sm font-body mb-6">Шаг 1 из 5</p>
       {isLoading ? (
         <div className="flex gap-3 overflow-x-auto pb-3">
           {[1, 2, 3].map(i => <BarberCardSkeleton key={i} />)}
@@ -584,11 +584,12 @@ export default function BookingScreen() {
   useEffect(() => {
     if (state.step === 1) {
       tg.BackButton.hide()
-    } else {
-      tg.BackButton.show()
-      tg.BackButton.onClick(() => dispatch({ type: 'PREV_STEP' }))
+      return
     }
-    return () => tg.BackButton.offClick(() => dispatch({ type: 'PREV_STEP' }))
+    const handler = () => dispatch({ type: 'PREV_STEP' })
+    tg.BackButton.show()
+    tg.BackButton.onClick(handler)
+    return () => tg.BackButton.offClick(handler)
   }, [state.step])
 
   // Main button for steps 1-4
@@ -601,22 +602,21 @@ export default function BookingScreen() {
       (state.step === 3 && !!state.date) ||
       (state.step === 4 && !!state.slot)
 
-    if (canProceed) {
-      tg.MainButton.setText('Далее')
-      tg.MainButton.show()
-      tg.MainButton.enable()
-      tg.MainButton.onClick(() => {
-        hapticImpact('light')
-        dispatch({ type: 'NEXT_STEP' })
-      })
-    } else {
+    if (!canProceed) {
       tg.MainButton.hide()
+      return
     }
 
-    return () => {
-      tg.MainButton.offClick(() => dispatch({ type: 'NEXT_STEP' }))
+    const handler = () => {
+      hapticImpact('light')
+      dispatch({ type: 'NEXT_STEP' })
     }
-  }, [state.step, state.barber, state.services, state.date, state.slot, state.booked])
+    tg.MainButton.setText('Далее')
+    tg.MainButton.show()
+    tg.MainButton.enable()
+    tg.MainButton.onClick(handler)
+    return () => tg.MainButton.offClick(handler)
+  }, [state.step, state.barber, state.services.length, state.date, state.slot, state.booked])
 
   const handleSubmit = useCallback(async () => {
     if (!client || !state.barber || !state.slot || state.services.length === 0) return
@@ -638,7 +638,7 @@ export default function BookingScreen() {
     } catch {
       hapticNotification('error')
     }
-  }, [client, state, createAppointment])
+  }, [client, state.barber, state.slot, state.services, state.bonusUsed, state.notes, createAppointment])
 
   if (state.booked) return <SuccessScreen />
 
