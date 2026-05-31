@@ -1,0 +1,16 @@
+{
+  "name": "barbershop-miniapp",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:client": "npm run dev --workspace=apps/client",
+    "dev:admin": "npm run dev --workspace=apps/admin",
+    "dev:bot": "npm run dev --workspace=apps/bot",
+    "build:client": "npm run build --workspace=apps/client",
+    "build:admin": "npm run build --workspace=apps/admin"
+  }
+}

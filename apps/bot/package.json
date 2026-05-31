@@ -1,0 +1,15 @@
+{
+  "name": "@barbershop/bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "grammy": "^1.30.0",
+    "node-cron": "^3.0.3"
+  }
+}
