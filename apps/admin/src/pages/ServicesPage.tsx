@@ -108,12 +108,18 @@ export function ServicesPage() {
       if (idx === -1) return
       const swapIdx = direction === 'up' ? idx - 1 : idx + 1
       if (swapIdx < 0 || swapIdx >= services.length) return
-      const a = services[idx]
-      const b = services[swapIdx]
-      await Promise.all([
-        supabase.from('services').update({ sort_order: b.sort_order }).eq('id', a.id),
-        supabase.from('services').update({ sort_order: a.sort_order }).eq('id', b.id),
-      ])
+
+      // Assign new sort_orders based on swapped positions
+      const newOrder = [...services.map(s => s.id)]
+      const temp = newOrder[idx]
+      newOrder[idx] = newOrder[swapIdx]
+      newOrder[swapIdx] = temp
+
+      await Promise.all(
+        newOrder.map((serviceId, position) =>
+          supabase.from('services').update({ sort_order: position }).eq('id', serviceId)
+        )
+      )
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-services'] }),
   })

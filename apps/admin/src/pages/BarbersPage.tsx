@@ -33,10 +33,13 @@ function BarberForm({ barber, onClose }: { barber?: Barber; onClose: () => void 
         const { error: uploadError } = await supabase.storage
           .from('avatars')
           .upload(path, photoFile, { upsert: true })
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
-          photoUrl = urlData.publicUrl
+        if (uploadError) {
+          setIsSubmitting(false)
+          alert(`Ошибка загрузки фото: ${uploadError.message}`)
+          return
         }
+        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+        photoUrl = urlData.publicUrl
       }
 
       const payload = {
