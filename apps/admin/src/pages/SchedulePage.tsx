@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { formatTime } from '../lib/format'
 import type { Barber, BarberSchedule, TimeSlot } from '../types'
 
 const DAYS_RU = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
@@ -22,7 +21,7 @@ function getWeekDates(offset = 0): string[] {
 }
 
 function useBarbers() {
-  const { role, user } = useAuth()
+  const { role } = useAuth()
   return useQuery({
     queryKey: ['schedule-barbers'],
     queryFn: async (): Promise<Barber[]> => {

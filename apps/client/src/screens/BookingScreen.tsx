@@ -572,7 +572,6 @@ function SuccessScreen() {
 
 // --- Main BookingScreen ---
 export default function BookingScreen() {
-  const navigate = useNavigate()
   const [state, dispatch] = useReducer(bookingReducer, initialState)
   const { data: client } = useClient()
   const { mutateAsync: createAppointment, isPending } = useCreateAppointment()
