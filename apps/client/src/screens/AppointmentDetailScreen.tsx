@@ -59,15 +59,15 @@ export default function AppointmentDetailScreen() {
         .update({ status: 'cancelled' })
         .eq('id', id)
 
-      // Also free the slot
+      if (error) throw error
+
+      // Only free the slot if appointment cancel succeeded
       if (appointment?.slot_id) {
         await supabase
           .from('time_slots')
           .update({ is_booked: false })
           .eq('id', appointment.slot_id)
       }
-
-      if (error) throw error
     },
     onSuccess: () => {
       hapticNotification('success')
