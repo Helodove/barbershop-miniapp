@@ -14,24 +14,20 @@ function useBarbers() {
 }
 
 async function createBarberAccount(barberId: string, email: string, password: string): Promise<string> {
-  const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlteGVta3VicmFyemhnaHZjaXRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDI1Nzk3NiwiZXhwIjoyMDk1ODMzOTc2fQ.zxBbpkc7ngkDDDsfV-38m4pPM05ER35RT7X6b-u7W2g'
-  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/admin/users`, {
+  // Call Edge Function — service key stays server-side only
+  const session = (await supabase.auth.getSession()).data.session
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-barber-account`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${SERVICE_KEY}`,
-      'apikey': SERVICE_KEY,
+      'Authorization': `Bearer ${session?.access_token ?? ''}`,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      email,
-      password,
-      user_metadata: { role: 'barber', barber_id: barberId },
-      email_confirm: true,
-    }),
+    body: JSON.stringify({ barber_id: barberId, email, password }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.message || 'Ошибка создания аккаунта')
-  return data.id as string
+  if (!res.ok) throw new Error(data.error || 'Ошибка создания аккаунта')
+  return data.auth_user_id as string
 }
 
 function BarberForm({ barber, onClose }: { barber?: Barber; onClose: () => void }) {
