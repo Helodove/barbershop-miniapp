@@ -11,6 +11,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard', label: 'Дашборд', icon: '📊', adminOnly: true },
   { to: '/appointments', label: 'Записи', icon: '📅' },
+  { to: '/bonus', label: 'Бонусы', icon: '✦', adminOnly: true },
   { to: '/schedule', label: 'Расписание', icon: '🗓️' },
   { to: '/clients', label: 'Клиенты', icon: '👥', adminOnly: true },
   { to: '/barbers', label: 'Сотрудники', icon: '✂️', adminOnly: true },

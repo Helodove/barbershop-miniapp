@@ -12,6 +12,7 @@ import { SchedulePage } from './pages/SchedulePage'
 import { ClientsPage } from './pages/ClientsPage'
 import { BarbersPage } from './pages/BarbersPage'
 import { ServicesPage } from './pages/ServicesPage'
+import { BonusPage } from './pages/BonusPage'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -70,6 +71,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 element={
                   <ProtectedRoute requiredRole="admin">
                     <ServicesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="bonus"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <BonusPage />
                   </ProtectedRoute>
                 }
               />
