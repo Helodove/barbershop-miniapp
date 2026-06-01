@@ -7,6 +7,7 @@ export interface Barber {
   bio: string | null
   telegram_id: number | null
   is_active: boolean
+  auth_user_id?: string | null
   created_at: string
 }
 

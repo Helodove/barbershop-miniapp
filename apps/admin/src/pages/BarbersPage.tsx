@@ -13,6 +13,27 @@ function useBarbers() {
   })
 }
 
+async function createBarberAccount(barberId: string, email: string, password: string): Promise<string> {
+  const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlteGVta3VicmFyemhnaHZjaXRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDI1Nzk3NiwiZXhwIjoyMDk1ODMzOTc2fQ.zxBbpkc7ngkDDDsfV-38m4pPM05ER35RT7X6b-u7W2g'
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SERVICE_KEY}`,
+      'apikey': SERVICE_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email,
+      password,
+      user_metadata: { role: 'barber', barber_id: barberId },
+      email_confirm: true,
+    }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.message || 'Ошибка создания аккаунта')
+  return data.id as string
+}
+
 function BarberForm({ barber, onClose }: { barber?: Barber; onClose: () => void }) {
   const queryClient = useQueryClient()
   const [name, setName] = useState(barber?.name ?? '')
@@ -20,6 +41,10 @@ function BarberForm({ barber, onClose }: { barber?: Barber; onClose: () => void 
   const [telegramId, setTelegramId] = useState(String(barber?.telegram_id ?? ''))
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const [createAccount, setCreateAccount] = useState(!barber)
+  const [barberEmail, setBarberEmail] = useState('')
+  const [barberPassword, setBarberPassword] = useState('')
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -42,17 +67,30 @@ function BarberForm({ barber, onClose }: { barber?: Barber; onClose: () => void 
         photoUrl = urlData.publicUrl
       }
 
-      const payload = {
+      const payload: Record<string, unknown> = {
         name,
         bio: bio || null,
         telegram_id: telegramId ? parseInt(telegramId, 10) : null,
         photo_url: photoUrl,
       }
 
+      let savedBarberId = barber?.id
+
       if (barber?.id) {
         await supabase.from('barbers').update(payload).eq('id', barber.id)
       } else {
-        await supabase.from('barbers').insert(payload)
+        const { data } = await supabase.from('barbers').insert(payload).select('id').single()
+        savedBarberId = data?.id
+      }
+
+      // Create auth account if requested
+      if (createAccount && barberEmail && barberPassword && savedBarberId) {
+        try {
+          const authUserId = await createBarberAccount(savedBarberId, barberEmail, barberPassword)
+          await supabase.from('barbers').update({ auth_user_id: authUserId }).eq('id', savedBarberId)
+        } catch (err) {
+          alert(`Барбер сохранён, но аккаунт не создан: ${err instanceof Error ? err.message : 'Ошибка'}`)
+        }
       }
 
       queryClient.invalidateQueries({ queryKey: ['admin-barbers'] })
@@ -66,7 +104,7 @@ function BarberForm({ barber, onClose }: { barber?: Barber; onClose: () => void 
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
       <form
         onSubmit={handleSubmit}
-        className="bg-white rounded-2xl w-full max-w-md p-6"
+        className="bg-white rounded-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
@@ -113,6 +151,49 @@ function BarberForm({ barber, onClose }: { barber?: Barber; onClose: () => void 
               className="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-gray-100"
             />
           </div>
+        </div>
+
+        {/* Account creation section */}
+        <div className="border-t border-gray-100 pt-4 mt-4">
+          <label className="flex items-center gap-2 cursor-pointer mb-3">
+            <div
+              className={`w-10 h-6 rounded-full transition-colors ${createAccount ? 'bg-black' : 'bg-gray-200'}`}
+              onClick={() => setCreateAccount(!createAccount)}
+            >
+              <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform m-0.5 ${createAccount ? 'translate-x-4' : 'translate-x-0'}`} />
+            </div>
+            <span className="text-sm font-medium text-gray-700">Создать аккаунт для входа в панель</span>
+          </label>
+
+          {createAccount && (
+            <div className="space-y-3 mt-2">
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Email для входа</label>
+                <input
+                  type="email"
+                  value={barberEmail}
+                  onChange={e => setBarberEmail(e.target.value)}
+                  placeholder="barber@example.com"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Пароль</label>
+                <input
+                  type="password"
+                  value={barberPassword}
+                  onChange={e => setBarberPassword(e.target.value)}
+                  placeholder="Минимум 6 символов"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                />
+              </div>
+              {barber?.auth_user_id && (
+                <p className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                  ✓ Аккаунт уже создан. Новый email/пароль перезапишут существующий.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 mt-6">
@@ -178,6 +259,9 @@ export function BarbersPage() {
                   <p className="font-semibold text-gray-900 truncate">{barber.name}</p>
                   {barber.bio && <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{barber.bio}</p>}
                   {barber.telegram_id && <p className="text-xs text-gray-300 mt-1">TG: {barber.telegram_id}</p>}
+                  {barber.auth_user_id && (
+                    <p className="text-xs text-blue-400 mt-1">Аккаунт создан</p>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">

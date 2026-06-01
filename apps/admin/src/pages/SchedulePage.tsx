@@ -21,15 +21,17 @@ function getWeekDates(offset = 0): string[] {
 }
 
 function useBarbers() {
-  const { role } = useAuth()
+  const { role, user } = useAuth()
   return useQuery({
     queryKey: ['schedule-barbers'],
     queryFn: async (): Promise<Barber[]> => {
       if (role === 'barber') {
-        const { data } = await supabase.from('barbers').select('*').eq('is_active', true)
-        return (data ?? []).filter(b => b.telegram_id === null) // barber sees their own
+        const myBarberId = user?.user_metadata?.barber_id as string | undefined
+        if (!myBarberId) return []
+        const { data } = await supabase.from('barbers').select('*').eq('is_active', true).eq('id', myBarberId)
+        return data ?? []
       }
-      const { data } = await supabase.from('barbers').select('*').eq('is_active', true)
+      const { data } = await supabase.from('barbers').select('*').eq('is_active', true).order('name')
       return data ?? []
     },
   })
@@ -159,11 +161,15 @@ function DayEditor({ barberId, date, schedule, slots, onSave, onGenerateSlots, i
 
 export function SchedulePage() {
   const queryClient = useQueryClient()
+  const { role, user } = useAuth()
+  const myBarberId = user?.user_metadata?.barber_id as string | undefined
   const { data: barbers = [] } = useBarbers()
   const [selectedBarberId, setSelectedBarberId] = useState('')
   const [weekOffset, setWeekOffset] = useState(0)
   const dates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
-  const barberId = selectedBarberId || barbers[0]?.id || ''
+  const barberId = role === 'barber'
+    ? (myBarberId ?? selectedBarberId || barbers[0]?.id || '')
+    : (selectedBarberId || barbers[0]?.id || '')
 
   const { data: schedules = [] } = useSchedules(barberId, dates)
   const { data: slots = [] } = useSlots(barberId, dates)
@@ -230,7 +236,7 @@ export function SchedulePage() {
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-gray-900">Расписание</h1>
         <div className="flex gap-2 flex-wrap">
-          {barbers.length > 1 && (
+          {role === 'admin' && barbers.length > 1 && (
             <select
               value={barberId}
               onChange={e => setSelectedBarberId(e.target.value)}

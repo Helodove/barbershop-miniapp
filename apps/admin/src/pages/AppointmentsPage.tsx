@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import { formatPrice, formatDate, formatTime } from '../lib/format'
 import type { Appointment, AppointmentStatus } from '../types'
 
@@ -177,8 +178,10 @@ function AppointmentDetailModal({
 
 export function AppointmentsPage() {
   const queryClient = useQueryClient()
+  const { role, user } = useAuth()
+  const myBarberId = user?.user_metadata?.barber_id as string | undefined
   const [view, setView] = useState<'table' | 'kanban'>('table')
-  const [filterBarber, setFilterBarber] = useState('')
+  const [filterBarber, setFilterBarber] = useState(myBarberId ?? '')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterDate, setFilterDate] = useState('')
   const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null)
@@ -245,14 +248,16 @@ export function AppointmentsPage() {
           onChange={e => setFilterDate(e.target.value)}
           className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
         />
-        <select
-          value={filterBarber}
-          onChange={e => setFilterBarber(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
-        >
-          <option value="">Все мастера</option>
-          {barbers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
+        {role === 'admin' && (
+          <select
+            value={filterBarber}
+            onChange={e => setFilterBarber(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
+          >
+            <option value="">Все мастера</option>
+            {barbers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        )}
         <select
           value={filterStatus}
           onChange={e => setFilterStatus(e.target.value)}
@@ -261,9 +266,9 @@ export function AppointmentsPage() {
           <option value="">Все статусы</option>
           {STATUSES.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
         </select>
-        {(filterBarber || filterStatus || filterDate) && (
+        {(filterStatus || filterDate || (role === 'admin' && filterBarber)) && (
           <button
-            onClick={() => { setFilterBarber(''); setFilterStatus(''); setFilterDate('') }}
+            onClick={() => { if (role === 'admin') setFilterBarber(''); setFilterStatus(''); setFilterDate('') }}
             className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl"
           >
             Сбросить
@@ -286,7 +291,9 @@ export function AppointmentsPage() {
                 <thead>
                   <tr className="border-b border-gray-100">
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Клиент</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Мастер</th>
+                    {role === 'admin' && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Мастер</th>
+                    )}
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Дата</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Сумма</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Статус</th>
@@ -303,7 +310,9 @@ export function AppointmentsPage() {
                         className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
                       >
                         <td className="px-4 py-3 text-sm text-gray-900">{clientName}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{appt.barber?.name}</td>
+                        {role === 'admin' && (
+                          <td className="px-4 py-3 text-sm text-gray-600">{appt.barber?.name}</td>
+                        )}
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {appt.slot ? `${formatDate(appt.slot.date)}, ${formatTime(appt.slot.start_time)}` : '—'}
                         </td>

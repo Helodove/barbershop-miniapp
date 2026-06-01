@@ -6,6 +6,7 @@ interface AuthContextValue {
   user: User | null
   session: Session | null
   role: UserRole | null
+  barberId: string | null
   isLoading: boolean
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
@@ -43,9 +44,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const role = getUserRole(user)
+  const barberId = (user?.user_metadata?.barber_id as string) ?? null
 
   return (
-    <AuthContext.Provider value={{ user, session, role, isLoading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, role, barberId, isLoading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )
