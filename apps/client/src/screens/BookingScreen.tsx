@@ -9,6 +9,7 @@ import { useCreateAppointment } from '../hooks/useAppointments'
 import { tg, hapticImpact, hapticNotification, hapticSelection } from '../lib/telegram'
 import { formatPrice, formatDuration, formatDateShort, formatDayOfWeek, formatTime } from '../lib/format'
 import { BarberCardSkeleton, ServiceCardSkeleton, Skeleton } from '../components/ui/Skeleton'
+import { supabase } from '../lib/supabase'
 import type { Barber, Service, TimeSlot } from '../types'
 
 type BookingStep = 1 | 2 | 3 | 4 | 5
@@ -21,6 +22,7 @@ interface BookingState {
   slot: TimeSlot | null
   bonusUsed: number
   notes: string
+  phone: string
   booked: boolean
 }
 
@@ -31,6 +33,7 @@ type BookingAction =
   | { type: 'SET_SLOT'; slot: TimeSlot }
   | { type: 'SET_BONUS'; amount: number }
   | { type: 'SET_NOTES'; notes: string }
+  | { type: 'SET_PHONE'; phone: string }
   | { type: 'NEXT_STEP' }
   | { type: 'PREV_STEP' }
   | { type: 'SET_BOOKED' }
@@ -43,6 +46,7 @@ const initialState: BookingState = {
   slot: null,
   bonusUsed: 0,
   notes: '',
+  phone: '',
   booked: false,
 }
 
@@ -65,6 +69,8 @@ function bookingReducer(state: BookingState, action: BookingAction): BookingStat
       return { ...state, bonusUsed: action.amount }
     case 'SET_NOTES':
       return { ...state, notes: action.notes }
+    case 'SET_PHONE':
+      return { ...state, phone: action.phone }
     case 'NEXT_STEP':
       return { ...state, step: Math.min(state.step + 1, 5) as BookingStep }
     case 'PREV_STEP':
@@ -469,6 +475,19 @@ function StepConfirm({
           </p>
         </div>
 
+        {/* Phone number */}
+        <div className="p-4 rounded-2xl bg-surface border border-white/5">
+          <p className="text-white/40 text-xs uppercase tracking-widest mb-3">Номер телефона</p>
+          <input
+            type="tel"
+            value={state.phone}
+            onChange={(e) => dispatch({ type: 'SET_PHONE', phone: e.target.value })}
+            placeholder="+7 (999) 000-00-00"
+            className="w-full bg-transparent text-white text-sm outline-none placeholder:text-white/20"
+            style={{ minHeight: '24px' }}
+          />
+        </div>
+
         {/* Bonus Usage */}
         {availableBonus > 0 && (
           <div className="p-4 rounded-2xl border" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.2)' }}>
@@ -632,12 +651,15 @@ export default function BookingScreen() {
         bonus_used: state.bonusUsed,
         notes: state.notes || undefined,
       })
+      if (state.phone && client?.id) {
+        await supabase.from('clients').update({ phone: state.phone }).eq('id', client.id)
+      }
       dispatch({ type: 'SET_BOOKED' })
       hapticNotification('success')
     } catch {
       hapticNotification('error')
     }
-  }, [client, state.barber, state.slot, state.services, state.bonusUsed, state.notes, createAppointment])
+  }, [client, state.barber, state.slot, state.services, state.bonusUsed, state.notes, state.phone, createAppointment])
 
   if (state.booked) return <SuccessScreen />
 
