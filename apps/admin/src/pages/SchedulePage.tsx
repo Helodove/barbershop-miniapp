@@ -168,7 +168,7 @@ export function SchedulePage() {
   const [weekOffset, setWeekOffset] = useState(0)
   const dates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
   const barberId = role === 'barber'
-    ? (myBarberId ?? selectedBarberId || barbers[0]?.id || '')
+    ? (myBarberId ?? (selectedBarberId || barbers[0]?.id || ''))
     : (selectedBarberId || barbers[0]?.id || '')
 
   const { data: schedules = [] } = useSchedules(barberId, dates)
