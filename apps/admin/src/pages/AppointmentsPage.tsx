@@ -34,7 +34,7 @@ function useAppointments(filterBarber: string, filterStatus: string, filterDate:
     queryFn: async (): Promise<Appointment[]> => {
       let query = supabase
         .from('appointments')
-        .select('*, barber:barbers(id, name), client:clients(id, first_name, last_name, username, telegram_id), slot:time_slots(id, date, start_time, end_time)')
+        .select('*, barber:barbers(id, name), client:clients(id, first_name, last_name, username, telegram_id, phone), slot:time_slots(id, date, start_time, end_time)')
         .order('created_at', { ascending: false })
 
       if (filterBarber) query = query.eq('barber_id', filterBarber)
@@ -64,6 +64,30 @@ function useBarbersList() {
       return data ?? []
     },
   })
+}
+
+function tgLink(username: string | null | undefined, telegramId: number | null | undefined): string | null {
+  if (username) return `https://t.me/${username}`
+  if (telegramId) return `tg://user?id=${telegramId}`
+  return null
+}
+
+function TelegramButton({ username, telegramId }: { username?: string | null; telegramId?: number | null }) {
+  const url = tgLink(username, telegramId)
+  if (!url) return null
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={e => e.stopPropagation()}
+      title="Написать в Telegram"
+      className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-sm hover:bg-blue-50 transition-colors flex-shrink-0"
+      style={{ color: '#229ED9' }}
+    >
+      ✈
+    </a>
+  )
 }
 
 function StatusBadge({ status }: { status: AppointmentStatus }) {
@@ -121,7 +145,18 @@ function AppointmentDetailModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Клиент</p>
-                <p className="text-sm font-medium text-gray-900">{clientName}</p>
+                <div className="flex items-center gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{clientName}</p>
+                    {appointment.client?.phone && (
+                      <p className="text-xs text-gray-400 mt-0.5">{appointment.client.phone}</p>
+                    )}
+                  </div>
+                  <TelegramButton
+                    username={appointment.client?.username}
+                    telegramId={appointment.client?.telegram_id}
+                  />
+                </div>
               </div>
               <div>
                 <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Мастер</p>
@@ -309,7 +344,15 @@ export function AppointmentsPage() {
                         onClick={() => setSelectedAppt(appt)}
                         className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
                       >
-                        <td className="px-4 py-3 text-sm text-gray-900">{clientName}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm text-gray-900">{clientName}</span>
+                            <TelegramButton
+                              username={appt.client?.username}
+                              telegramId={appt.client?.telegram_id}
+                            />
+                          </div>
+                        </td>
                         {role === 'admin' && (
                           <td className="px-4 py-3 text-sm text-gray-600">{appt.barber?.name}</td>
                         )}
@@ -347,10 +390,14 @@ export function AppointmentsPage() {
                     <div
                       key={appt.id}
                       onClick={() => setSelectedAppt(appt)}
+
                       className="bg-white rounded-xl p-3 cursor-pointer hover:shadow-sm transition-shadow border border-white/80"
                     >
-                      <p className="text-sm font-medium text-gray-900 truncate">{clientName}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{appt.barber?.name}</p>
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <p className="text-sm font-medium text-gray-900 truncate flex-1">{clientName}</p>
+                        <TelegramButton username={appt.client?.username} telegramId={appt.client?.telegram_id} />
+                      </div>
+                      <p className="text-xs text-gray-500">{appt.barber?.name}</p>
                       {appt.slot && (
                         <p className="text-xs text-gray-400 mt-0.5">{formatTime(appt.slot.start_time)}</p>
                       )}
