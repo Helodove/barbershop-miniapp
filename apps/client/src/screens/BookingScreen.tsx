@@ -46,7 +46,7 @@ const initialState: BookingState = {
   slot: null,
   bonusUsed: 0,
   notes: '',
-  phone: '',
+  phone: '+7',
   booked: false,
 }
 
@@ -481,7 +481,17 @@ function StepConfirm({
           <input
             type="tel"
             value={state.phone}
-            onChange={(e) => dispatch({ type: 'SET_PHONE', phone: e.target.value })}
+            onChange={(e) => {
+              let v = e.target.value
+              if (!v.startsWith('+7')) v = '+7' + v.replace(/^\+?7?/, '')
+              const digits = v.slice(2).replace(/\D/g, '').slice(0, 10)
+              let formatted = '+7'
+              if (digits.length > 0) formatted += ' (' + digits.slice(0, 3)
+              if (digits.length >= 3) formatted += ') ' + digits.slice(3, 6)
+              if (digits.length >= 6) formatted += '-' + digits.slice(6, 8)
+              if (digits.length >= 8) formatted += '-' + digits.slice(8, 10)
+              dispatch({ type: 'SET_PHONE', phone: formatted })
+            }}
             placeholder="+7 (999) 000-00-00"
             className="w-full bg-transparent text-white text-sm outline-none placeholder:text-white/20"
             style={{ minHeight: '24px' }}
