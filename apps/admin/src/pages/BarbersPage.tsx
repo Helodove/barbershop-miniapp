@@ -217,12 +217,36 @@ export function BarbersPage() {
   const queryClient = useQueryClient()
   const { data: barbers = [], isLoading } = useBarbers()
   const [editBarber, setEditBarber] = useState<Barber | 'new' | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
   const toggleActive = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
       await supabase.from('barbers').update({ is_active }).eq('id', id)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-barbers'] }),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async (barberId: string) => {
+      // Check if barber has active appointments
+      const { data: appts } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('barber_id', barberId)
+        .in('status', ['pending', 'confirmed'])
+        .limit(1)
+
+      if (appts && appts.length > 0) {
+        throw new Error('Нельзя удалить мастера с активными записями. Сначала отмените или завершите записи.')
+      }
+
+      const { error } = await supabase.from('barbers').delete().eq('id', barberId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-barbers'] })
+      setDeleteConfirmId(null)
+    },
   })
 
   return (
@@ -260,24 +284,67 @@ export function BarbersPage() {
                   )}
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={() => setEditBarber(barber)}
-                  className="flex-1 py-2 text-xs border border-gray-200 text-gray-600 rounded-xl"
+                  className="flex-1 py-2 text-xs border border-gray-200 text-gray-600 rounded-xl min-h-[36px]"
                 >
                   Редактировать
                 </button>
                 <button
                   onClick={() => toggleActive.mutate({ id: barber.id, is_active: !barber.is_active })}
-                  className={`flex-1 py-2 text-xs rounded-xl ${barber.is_active ? 'border border-red-200 text-red-500' : 'border border-green-200 text-green-600'}`}
+                  className={`flex-1 py-2 text-xs rounded-xl min-h-[36px] ${barber.is_active ? 'border border-red-200 text-red-500' : 'border border-green-200 text-green-600'}`}
                 >
                   {barber.is_active ? 'Деактивировать' : 'Активировать'}
+                </button>
+                <button
+                  onClick={() => setDeleteConfirmId(barber.id)}
+                  className="py-2 px-3 text-xs text-gray-400 hover:text-red-500 border border-gray-100 rounded-xl min-h-[36px]"
+                >
+                  🗑
                 </button>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {deleteConfirmId && (() => {
+        const barber = barbers.find(b => b.id === deleteConfirmId)
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setDeleteConfirmId(null)}>
+            <div className="bg-white rounded-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Удалить мастера?</h3>
+              <p className="text-gray-500 text-sm mb-1">
+                <span className="font-medium">{barber?.name}</span>
+              </p>
+              <p className="text-gray-400 text-sm mb-5">
+                Удалятся все расписания и слоты. Записи с активным статусом удалить нельзя.
+              </p>
+              {deleteMutation.isError && (
+                <p className="text-red-500 text-sm bg-red-50 p-3 rounded-xl mb-4">
+                  {(deleteMutation.error as Error).message}
+                </p>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={() => deleteMutation.mutate(deleteConfirmId)}
+                  disabled={deleteMutation.isPending}
+                  className="flex-1 py-2.5 bg-red-500 text-white rounded-xl text-sm font-medium disabled:opacity-50"
+                >
+                  {deleteMutation.isPending ? 'Удаление...' : 'Удалить'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {editBarber !== null && (
         <BarberForm

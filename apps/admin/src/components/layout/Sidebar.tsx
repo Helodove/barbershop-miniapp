@@ -13,6 +13,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/appointments', label: 'Записи', icon: '📅' },
   { to: '/bonus', label: 'Бонусы', icon: '✦', adminOnly: true },
   { to: '/schedule', label: 'Расписание', icon: '🗓️' },
+  { to: '/my-services', label: 'Мои услуги', icon: '💈' },
   { to: '/clients', label: 'Клиенты', icon: '👥', adminOnly: true },
   { to: '/barbers', label: 'Сотрудники', icon: '✂️', adminOnly: true },
   { to: '/services', label: 'Услуги', icon: '💈', adminOnly: true },

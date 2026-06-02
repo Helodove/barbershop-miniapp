@@ -13,6 +13,7 @@ import { ClientsPage } from './pages/ClientsPage'
 import { BarbersPage } from './pages/BarbersPage'
 import { ServicesPage } from './pages/ServicesPage'
 import { BonusPage } from './pages/BonusPage'
+import { BarberServicesPage } from './pages/BarberServicesPage'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -82,6 +83,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                   </ProtectedRoute>
                 }
               />
+              <Route path="my-services" element={<BarberServicesPage />} />
               <Route path="*" element={<Navigate to="/appointments" replace />} />
             </Route>
           </Routes>
