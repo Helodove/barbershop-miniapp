@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useMemo, useCallback } from 'react'
+import { useReducer, useEffect, useMemo, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBarbers } from '../hooks/useBarbers'
@@ -422,11 +422,13 @@ function StepConfirm({
   dispatch,
   onSubmit,
   isSubmitting,
+  error,
 }: {
   state: BookingState
   dispatch: React.Dispatch<BookingAction>
   onSubmit: () => void
   isSubmitting: boolean
+  error: string | null
 }) {
   const { data: client } = useClient()
 
@@ -592,6 +594,12 @@ function StepConfirm({
         >
           {isSubmitting ? 'Оформление...' : 'Подтвердить запись'}
         </motion.button>
+
+        {error && (
+          <div className="mt-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
+            <p className="text-red-400 text-sm text-center">{error}</p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -666,7 +674,7 @@ function SuccessScreen() {
 export default function BookingScreen() {
   const [state, dispatch] = useReducer(bookingReducer, initialState)
   const { data: client } = useClient()
-  const { mutateAsync: createAppointment, isPending } = useCreateAppointment()
+  const { mutateAsync: createAppointment } = useCreateAppointment()
 
   // Progress bar
   const progress = ((state.step - 1) / 4) * 100
@@ -709,36 +717,73 @@ export default function BookingScreen() {
     return () => tg.MainButton.offClick(handler)
   }, [state.step, state.barber, state.services.length, state.date, state.slot, state.booked])
 
-  const handleSubmit = useCallback(async () => {
-    if (!client || !state.barber || !state.slot || state.services.length === 0) return
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const handleSubmit = useCallback(async () => {
+    if (isSubmitting) return
+    setSubmitError(null)
+
+    if (!state.barber || !state.slot || state.services.length === 0) {
+      setSubmitError('Выберите мастера, услуги и время')
+      return
+    }
+
+    setIsSubmitting(true)
     try {
       hapticImpact('medium')
+
+      // total_price хранится как исходная цена (до вычета бонусов)
+      const originalPrice = state.services.reduce((s, x) => s + x.price, 0)
+
+      let apptClientId = client?.id
+      if (!apptClientId) {
+        // Клиент ещё не загружен — создаём/получаем
+        const tgUser = (await import('../lib/telegram')).getTelegramUser()
+        if (tgUser) {
+          const { data } = await supabase
+            .from('clients')
+            .upsert({ telegram_id: tgUser.id, first_name: tgUser.first_name ?? null, username: tgUser.username ?? null }, { onConflict: 'telegram_id' })
+            .select('id').single()
+          apptClientId = data?.id
+        }
+      }
+
+      if (!apptClientId) {
+        setSubmitError('Не удалось определить пользователя. Откройте приложение через Telegram.')
+        return
+      }
+
       await createAppointment({
-        client_id: client.id,
+        client_id: apptClientId,
         barber_id: state.barber.id,
         slot_id: state.slot.id,
         services: state.services,
-        total_price: state.services.reduce((s, x) => s + x.price, 0) - state.bonusUsed,
+        total_price: originalPrice,
         total_duration: state.services.reduce((s, x) => s + x.duration_minutes, 0),
         bonus_used: state.bonusUsed,
         notes: state.notes || undefined,
       })
-      if (client?.id) {
-        const updates: Record<string, string> = {}
-        if (state.phone && state.phone !== '+7') updates.phone = state.phone
-        if (state.firstName) updates.first_name = state.firstName
-        if (state.lastName) updates.last_name = state.lastName
-        if (Object.keys(updates).length > 0) {
-          await supabase.from('clients').update(updates).eq('id', client.id)
-        }
+
+      // Сохраняем профиль клиента
+      const updates: Record<string, string> = {}
+      if (state.phone && state.phone !== '+7') updates.phone = state.phone
+      if (state.firstName) updates.first_name = state.firstName
+      if (state.lastName) updates.last_name = state.lastName
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('clients').update(updates).eq('id', apptClientId)
       }
+
       dispatch({ type: 'SET_BOOKED' })
       hapticNotification('success')
-    } catch {
+    } catch (err: unknown) {
       hapticNotification('error')
+      const msg = err instanceof Error ? err.message : 'Ошибка при создании записи'
+      setSubmitError(msg)
+    } finally {
+      setIsSubmitting(false)
     }
-  }, [client, state.barber, state.slot, state.services, state.bonusUsed, state.notes, state.phone, state.firstName, state.lastName, createAppointment])
+  }, [client, isSubmitting, state.barber, state.slot, state.services, state.bonusUsed, state.notes, state.phone, state.firstName, state.lastName, createAppointment])
 
   if (state.booked) return <SuccessScreen />
 
@@ -747,7 +792,7 @@ export default function BookingScreen() {
     2: <StepServices state={state} dispatch={dispatch} />,
     3: <StepDate state={state} dispatch={dispatch} />,
     4: <StepTime state={state} dispatch={dispatch} />,
-    5: <StepConfirm state={state} dispatch={dispatch} onSubmit={handleSubmit} isSubmitting={isPending} />,
+    5: <StepConfirm state={state} dispatch={dispatch} onSubmit={handleSubmit} isSubmitting={isSubmitting} error={submitError} />,
   }
 
   return (
