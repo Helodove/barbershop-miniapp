@@ -581,6 +581,17 @@ function StepConfirm({
             <p className="text-gold font-display font-bold text-xl">{formatPrice(finalPrice)}</p>
           </div>
         </div>
+
+        {/* Visible confirm button — primary action */}
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={onSubmit}
+          disabled={isSubmitting}
+          className="w-full py-4 rounded-2xl font-display font-bold text-black text-lg mt-2 disabled:opacity-60"
+          style={{ background: 'linear-gradient(135deg, #E8C97A 0%, #C9A84C 50%, #A88830 100%)' }}
+        >
+          {isSubmitting ? 'Оформление...' : 'Подтвердить запись'}
+        </motion.button>
       </div>
     </div>
   )
@@ -740,7 +751,7 @@ export default function BookingScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="bg-bg">
       {/* Progress bar */}
       <div className="h-1 bg-white/5">
         <motion.div
@@ -751,7 +762,7 @@ export default function BookingScreen() {
         />
       </div>
 
-      <div className="px-4 pt-6 pb-32">
+      <div className="px-4 pt-6 pb-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={state.step}

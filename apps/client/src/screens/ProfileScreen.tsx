@@ -89,7 +89,7 @@ export default function ProfileScreen() {
   const avatarUrl = tgUser?.photo_url
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="bg-bg">
       <div className="px-4 pt-8 pb-6">
         {/* Header */}
         <motion.div

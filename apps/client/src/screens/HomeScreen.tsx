@@ -81,7 +81,7 @@ export default function HomeScreen() {
   const firstName = tgUser?.first_name ?? 'Гость'
 
   return (
-    <div className="min-h-screen bg-bg relative overflow-hidden">
+    <div className="bg-bg relative overflow-hidden">
       {/* Decorative gold geometric lines background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <svg className="absolute top-0 right-0 w-64 h-64 opacity-[0.04]" viewBox="0 0 256 256">

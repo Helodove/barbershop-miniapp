@@ -18,7 +18,7 @@ export function AppLayout() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col">
+    <div className="bg-bg flex flex-col" style={{ minHeight: '100dvh' }}>
       <AnimatePresence mode="wait">
         <motion.div
           key={location.pathname}

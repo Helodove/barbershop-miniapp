@@ -90,7 +90,7 @@ export default function AppointmentDetailScreen() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-bg">
+      <div className="flex items-center justify-center bg-bg" style={{ minHeight: "100dvh" }}>
         <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin" />
       </div>
     )
@@ -98,7 +98,7 @@ export default function AppointmentDetailScreen() {
 
   if (!appointment) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-bg px-6 text-center">
+      <div className="flex flex-col items-center justify-center bg-bg px-6 text-center" style={{ minHeight: "100dvh" }}>
         <p className="text-white/40 font-body mb-4">Запись не найдена</p>
         <button onClick={() => navigate(-1)} className="text-gold text-sm">Назад</button>
       </div>
@@ -118,7 +118,7 @@ export default function AppointmentDetailScreen() {
   const totalDuration = (appointment.services ?? []).reduce((s, x) => s + x.duration_minutes, 0)
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="bg-bg">
       <div className="px-4 pt-6 pb-8">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
