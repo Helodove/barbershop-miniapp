@@ -31,6 +31,7 @@ export interface Client {
   phone: string | null
   bonus_points: number
   total_visits: number
+  bonus_per_visit: number | null
   created_at: string
 }
 

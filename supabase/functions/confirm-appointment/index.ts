@@ -70,10 +70,27 @@ serve(async (req) => {
 
       if (updateError) throw updateError
 
+      // Determine bonus: client-specific override or global setting
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('bonus_per_visit')
+        .eq('id', appointment.client_id)
+        .single()
+
+      let bonusToAward = clientData?.bonus_per_visit ?? null
+      if (bonusToAward === null) {
+        const { data: setting } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'bonus_per_visit')
+          .single()
+        bonusToAward = parseInt(setting?.value ?? '100', 10)
+      }
+
       // Atomic increment using RPC
       await supabase.rpc('increment_client_bonus', {
         p_client_id: appointment.client_id,
-        p_points: BONUS_PER_VISIT
+        p_points: bonusToAward
       })
 
       await supabase.rpc('increment_client_visits', {
@@ -83,12 +100,12 @@ serve(async (req) => {
       await supabase.from('bonus_history').insert({
         client_id: appointment.client_id,
         appointment_id: appointment_id,
-        points_change: BONUS_PER_VISIT,
+        points_change: bonusToAward,
         reason: 'Начислено за посещение'
       })
 
       return new Response(
-        JSON.stringify({ success: true, bonus_earned: BONUS_PER_VISIT }),
+        JSON.stringify({ success: true, bonus_earned: bonusToAward }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

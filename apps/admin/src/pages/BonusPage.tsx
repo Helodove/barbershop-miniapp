@@ -157,9 +157,14 @@ function BonusSettingCard() {
 
 function ClientBonusModal({ client, onClose }: { client: Client; onClose: () => void }) {
   const queryClient = useQueryClient()
+  const { data: globalBonus } = useBonusSetting()
   const { data: history = [], isLoading } = useClientBonusHistory(client.id)
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
+  const [customBonus, setCustomBonus] = useState<string>(
+    client.bonus_per_visit != null ? String(client.bonus_per_visit) : ''
+  )
+  const [savingBonus, setSavingBonus] = useState(false)
 
   const name = [client.first_name, client.last_name].filter(Boolean).join(' ')
     || client.username
@@ -227,6 +232,55 @@ function ClientBonusModal({ client, onClose }: { client: Client; onClose: () => 
               <p className="text-sm font-bold text-gray-900">{formatDate(client.created_at).slice(0, 6)}</p>
               <p className="text-xs text-gray-400 mt-0.5">С нами с</p>
             </div>
+          </div>
+
+          {/* Custom bonus per visit */}
+          <div className="border border-gray-100 rounded-xl p-4 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold text-gray-800">Баллов за визит</p>
+              {client.bonus_per_visit != null && (
+                <button
+                  onClick={async () => {
+                    await supabase.from('clients').update({ bonus_per_visit: null }).eq('id', client.id)
+                    queryClient.invalidateQueries({ queryKey: ['bonus-clients'] })
+                    setCustomBonus('')
+                  }}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  Сбросить к глобальному
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={customBonus}
+                onChange={e => setCustomBonus(e.target.value)}
+                placeholder={`По умолчанию: ${globalBonus ?? 100}`}
+                min="1"
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
+              />
+              <span className="text-gray-400 text-sm flex-shrink-0">баллов</span>
+              <button
+                disabled={savingBonus || !customBonus}
+                onClick={async () => {
+                  const val = parseInt(customBonus, 10)
+                  if (isNaN(val) || val < 1) return
+                  setSavingBonus(true)
+                  await supabase.from('clients').update({ bonus_per_visit: val }).eq('id', client.id)
+                  queryClient.invalidateQueries({ queryKey: ['bonus-clients'] })
+                  setSavingBonus(false)
+                }}
+                className="px-3 py-2 bg-black text-white rounded-xl text-sm disabled:opacity-50 flex-shrink-0"
+              >
+                {savingBonus ? '...' : 'OK'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              {client.bonus_per_visit != null
+                ? `Индивидуально: ${client.bonus_per_visit} баллов за визит`
+                : `Используется глобальный: ${globalBonus ?? 100} баллов`}
+            </p>
           </div>
 
           {/* Manual adjustment */}
