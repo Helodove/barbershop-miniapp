@@ -23,6 +23,8 @@ interface BookingState {
   bonusUsed: number
   notes: string
   phone: string
+  firstName: string
+  lastName: string
   booked: boolean
 }
 
@@ -34,6 +36,7 @@ type BookingAction =
   | { type: 'SET_BONUS'; amount: number }
   | { type: 'SET_NOTES'; notes: string }
   | { type: 'SET_PHONE'; phone: string }
+  | { type: 'SET_NAME'; firstName: string; lastName: string }
   | { type: 'NEXT_STEP' }
   | { type: 'PREV_STEP' }
   | { type: 'SET_BOOKED' }
@@ -47,6 +50,8 @@ const initialState: BookingState = {
   bonusUsed: 0,
   notes: '',
   phone: '+7',
+  firstName: '',
+  lastName: '',
   booked: false,
 }
 
@@ -71,6 +76,8 @@ function bookingReducer(state: BookingState, action: BookingAction): BookingStat
       return { ...state, notes: action.notes }
     case 'SET_PHONE':
       return { ...state, phone: action.phone }
+    case 'SET_NAME':
+      return { ...state, firstName: action.firstName, lastName: action.lastName }
     case 'NEXT_STEP':
       return { ...state, step: Math.min(state.step + 1, 5) as BookingStep }
     case 'PREV_STEP':
@@ -422,6 +429,22 @@ function StepConfirm({
   isSubmitting: boolean
 }) {
   const { data: client } = useClient()
+
+  // Pre-populate name from saved client data (only once, when client loads)
+  useEffect(() => {
+    if (!client) return
+    if (state.firstName === '' && state.lastName === '') {
+      dispatch({
+        type: 'SET_NAME',
+        firstName: client.first_name ?? '',
+        lastName: client.last_name ?? '',
+      })
+    }
+    if (state.phone === '+7' && client.phone) {
+      dispatch({ type: 'SET_PHONE', phone: client.phone })
+    }
+  }, [client?.id])
+
   const totalPrice = state.services.reduce((s, x) => s + x.price, 0)
   const maxBonus = Math.floor(totalPrice * 0.2)
   const availableBonus = Math.min(client?.bonus_points ?? 0, maxBonus)
@@ -473,6 +496,35 @@ function StepConfirm({
             {state.date && formatDateShort(state.date)},{' '}
             {state.slot && formatTime(state.slot.start_time)}
           </p>
+        </div>
+
+        {/* Name */}
+        <div className="p-4 rounded-2xl bg-surface border border-white/5">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-white/40 text-xs uppercase tracking-widest">Имя и фамилия</p>
+            {client?.first_name && client?.last_name && (
+              <span className="text-white/20 text-xs">сохранено ✓</span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={state.firstName}
+              onChange={e => dispatch({ type: 'SET_NAME', firstName: e.target.value, lastName: state.lastName })}
+              placeholder="Имя"
+              className="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-white/20 min-w-0"
+              style={{ minHeight: '24px' }}
+            />
+            <div className="w-px bg-white/10 self-stretch" />
+            <input
+              type="text"
+              value={state.lastName}
+              onChange={e => dispatch({ type: 'SET_NAME', firstName: state.firstName, lastName: e.target.value })}
+              placeholder="Фамилия"
+              className="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-white/20 min-w-0"
+              style={{ minHeight: '24px' }}
+            />
+          </div>
         </div>
 
         {/* Phone number */}
@@ -661,15 +713,21 @@ export default function BookingScreen() {
         bonus_used: state.bonusUsed,
         notes: state.notes || undefined,
       })
-      if (state.phone && client?.id) {
-        await supabase.from('clients').update({ phone: state.phone }).eq('id', client.id)
+      if (client?.id) {
+        const updates: Record<string, string> = {}
+        if (state.phone && state.phone !== '+7') updates.phone = state.phone
+        if (state.firstName) updates.first_name = state.firstName
+        if (state.lastName) updates.last_name = state.lastName
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('clients').update(updates).eq('id', client.id)
+        }
       }
       dispatch({ type: 'SET_BOOKED' })
       hapticNotification('success')
     } catch {
       hapticNotification('error')
     }
-  }, [client, state.barber, state.slot, state.services, state.bonusUsed, state.notes, state.phone, createAppointment])
+  }, [client, state.barber, state.slot, state.services, state.bonusUsed, state.notes, state.phone, state.firstName, state.lastName, createAppointment])
 
   if (state.booked) return <SuccessScreen />
 
