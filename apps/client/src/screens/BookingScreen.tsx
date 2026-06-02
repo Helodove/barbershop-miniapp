@@ -1,12 +1,11 @@
-import { useReducer, useEffect, useMemo, useCallback, useState } from 'react'
+import { useReducer, useEffect, useMemo, useCallback, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBarbers } from '../hooks/useBarbers'
-import { useServices, groupServicesByCategory } from '../hooks/useServices'
+import { useServices, useBarberServices, groupServicesByCategory } from '../hooks/useServices'
 import { useSlots } from '../hooks/useSlots'
 import { useClient } from '../hooks/useClient'
-import { useCreateAppointment } from '../hooks/useAppointments'
-import { tg, hapticImpact, hapticNotification, hapticSelection } from '../lib/telegram'
+import { tg, hapticImpact, hapticNotification, hapticSelection, getTelegramUser } from '../lib/telegram'
 import { formatPrice, formatDuration, formatDateShort, formatDayOfWeek, formatTime } from '../lib/format'
 import { BarberCardSkeleton, ServiceCardSkeleton, Skeleton } from '../components/ui/Skeleton'
 import { supabase } from '../lib/supabase'
@@ -174,7 +173,21 @@ function StepServices({
   dispatch: React.Dispatch<BookingAction>
 }) {
   const { data: services = [], isLoading } = useServices()
-  const grouped = useMemo(() => groupServicesByCategory(services), [services])
+  const { data: barberServiceOverrides = [] } = useBarberServices(state.barber?.id ?? null)
+
+  const displayServices = useMemo(() => {
+    if (barberServiceOverrides.length === 0) return services // fallback: all services
+
+    const enabledIds = new Set(barberServiceOverrides.map(bs => bs.service_id))
+    return services
+      .filter(s => enabledIds.has(s.id))
+      .map(s => {
+        const override = barberServiceOverrides.find(bs => bs.service_id === s.id)
+        return override?.custom_price ? { ...s, price: override.custom_price } : s
+      })
+  }, [services, barberServiceOverrides])
+
+  const grouped = useMemo(() => groupServicesByCategory(displayServices), [displayServices])
   const totalPrice = state.services.reduce((s, x) => s + x.price, 0)
   const totalDuration = state.services.reduce((s, x) => s + x.duration_minutes, 0)
 
@@ -673,8 +686,6 @@ function SuccessScreen() {
 // --- Main BookingScreen ---
 export default function BookingScreen() {
   const [state, dispatch] = useReducer(bookingReducer, initialState)
-  const { data: client } = useClient()
-  const { mutateAsync: createAppointment } = useCreateAppointment()
 
   // Progress bar
   const progress = ((state.step - 1) / 4) * 100
@@ -719,71 +730,83 @@ export default function BookingScreen() {
 
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
 
   const handleSubmit = useCallback(async () => {
-    if (isSubmitting) return
-    setSubmitError(null)
-
+    if (submittingRef.current) return
     if (!state.barber || !state.slot || state.services.length === 0) {
       setSubmitError('Выберите мастера, услуги и время')
       return
     }
 
+    submittingRef.current = true
     setIsSubmitting(true)
+    setSubmitError(null)
+
     try {
       hapticImpact('medium')
 
-      // total_price хранится как исходная цена (до вычета бонусов)
+      // Always get fresh client (don't rely on stale cache)
+      const tgUser = getTelegramUser()
+      if (!tgUser?.id) {
+        throw new Error('Откройте приложение через Telegram')
+      }
+
+      const { data: clientRow, error: clientErr } = await supabase
+        .from('clients')
+        .upsert(
+          {
+            telegram_id: tgUser.id,
+            username: tgUser.username ?? null,
+            first_name: state.firstName || tgUser.first_name || null,
+            last_name: state.lastName || null,
+            phone: (state.phone && state.phone !== '+7') ? state.phone : null,
+          },
+          { onConflict: 'telegram_id' }
+        )
+        .select('id')
+        .single()
+
+      if (clientErr) throw new Error(`Ошибка профиля: ${clientErr.message}`)
+      if (!clientRow?.id) throw new Error('Не удалось определить пользователя')
+
       const originalPrice = state.services.reduce((s, x) => s + x.price, 0)
 
-      let apptClientId = client?.id
-      if (!apptClientId) {
-        // Клиент ещё не загружен — создаём/получаем
-        const tgUser = (await import('../lib/telegram')).getTelegramUser()
-        if (tgUser) {
-          const { data } = await supabase
-            .from('clients')
-            .upsert({ telegram_id: tgUser.id, first_name: tgUser.first_name ?? null, username: tgUser.username ?? null }, { onConflict: 'telegram_id' })
-            .select('id').single()
-          apptClientId = data?.id
-        }
-      }
+      const { data: apptRows, error: apptErr } = await supabase
+        .from('appointments')
+        .insert({
+          client_id: clientRow.id,
+          barber_id: state.barber.id,
+          slot_id: state.slot.id,
+          services: state.services,
+          total_price: originalPrice,
+          total_duration: state.services.reduce((s, x) => s + x.duration_minutes, 0),
+          bonus_used: state.bonusUsed,
+          notes: state.notes || null,
+        })
+        .select('id')
 
-      if (!apptClientId) {
-        setSubmitError('Не удалось определить пользователя. Откройте приложение через Telegram.')
-        return
-      }
+      if (apptErr) throw new Error(`Ошибка записи: ${apptErr.message}`)
+      if (!apptRows || apptRows.length === 0) throw new Error('Запись не создана. Попробуйте ещё раз.')
 
-      await createAppointment({
-        client_id: apptClientId,
-        barber_id: state.barber.id,
-        slot_id: state.slot.id,
-        services: state.services,
-        total_price: originalPrice,
-        total_duration: state.services.reduce((s, x) => s + x.duration_minutes, 0),
-        bonus_used: state.bonusUsed,
-        notes: state.notes || undefined,
-      })
-
-      // Сохраняем профиль клиента
-      const updates: Record<string, string> = {}
-      if (state.phone && state.phone !== '+7') updates.phone = state.phone
-      if (state.firstName) updates.first_name = state.firstName
-      if (state.lastName) updates.last_name = state.lastName
-      if (Object.keys(updates).length > 0) {
-        await supabase.from('clients').update(updates).eq('id', apptClientId)
-      }
+      // Mark slot as booked
+      await supabase.from('time_slots').update({ is_booked: true }).eq('id', state.slot.id)
 
       dispatch({ type: 'SET_BOOKED' })
       hapticNotification('success')
     } catch (err: unknown) {
       hapticNotification('error')
-      const msg = err instanceof Error ? err.message : 'Ошибка при создании записи'
+      const msg = err instanceof Error
+        ? err.message
+        : (typeof err === 'object' && err !== null && 'message' in err)
+          ? String((err as { message: unknown }).message)
+          : 'Ошибка при создании записи'
       setSubmitError(msg)
     } finally {
+      submittingRef.current = false
       setIsSubmitting(false)
     }
-  }, [client, isSubmitting, state.barber, state.slot, state.services, state.bonusUsed, state.notes, state.phone, state.firstName, state.lastName, createAppointment])
+  }, [state.barber, state.slot, state.services, state.bonusUsed, state.notes, state.phone, state.firstName, state.lastName])
 
   if (state.booked) return <SuccessScreen />
 

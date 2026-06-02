@@ -27,3 +27,27 @@ export function groupServicesByCategory(services: Service[]): Record<string, Ser
   }
   return grouped
 }
+
+export interface BarberService {
+  id: string
+  service_id: string
+  custom_price: number | null
+  is_active: boolean
+}
+
+export function useBarberServices(barberId: string | null) {
+  return useQuery({
+    queryKey: ['barber-services-client', barberId],
+    queryFn: async (): Promise<BarberService[]> => {
+      if (!barberId) return []
+      const { data } = await supabase
+        .from('barber_services')
+        .select('id, service_id, custom_price, is_active')
+        .eq('barber_id', barberId)
+        .eq('is_active', true)
+      return data ?? []
+    },
+    enabled: !!barberId,
+    staleTime: 2 * 60 * 1000,
+  })
+}
